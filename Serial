@@ -1,0 +1,60 @@
+#include <Arduino.h>
+// recibe 3 comandos para realizar tareas
+// dos de ellos solo le ordenan ejecutar acciones
+// que seran el encendido de leds
+// uno de ellos le pregunta al arduino mega que envie el valor de 
+// lectura analógica del canal0
+// LED13!  se ordena encender el led 13 (el de la tarjeta)
+// LED08!  se ordena encender el led 8 (el de la tarjeta)
+// ADC00!  se ordena leer el canal analogico 0 y enviar el resulatdo
+// ADC01!  se ordena leer el canal analogico 1 y enviar el resulatdo
+// la forma en que responde el micro es
+// ADC00#VALOR! o ADC01#VALOR!
+
+
+String comando = "";      // un String con el comando a ejecutar
+String cabecera = "";
+String num_str = "";
+bool cmd_ok = false;  //bool que indica que ya esta listo el comando 
+uint16_t res_adc;
+
+void lectura_serial(void); //lee el puerto serial 1
+
+void setup() {
+  pinMode(18,OUTPUT);
+  digitalWrite(18,LOW);
+  pinMode(19,OUTPUT);
+  digitalWrite(19,LOW);
+  // initialize serial:
+  Serial2.begin(9600);
+  comando.reserve(50); 
+}
+
+void loop() {
+  lectura_serial();
+
+  if (cmd_ok) {
+    cabecera = comando.substring(0,3);
+    num_str = comando.substring(3,5);
+    if(cabecera.equals("LED")){
+      digitalWrite(num_str.toInt(),!digitalRead(num_str.toInt()));
+    }else if (cabecera.equals("ADC"))
+    {
+      res_adc = analogRead(num_str.toInt());
+      Serial2.print(cabecera + num_str + "#" + res_adc + "!");
+    }
+    comando = "";
+    cmd_ok = false;
+  }
+}
+
+
+void lectura_serial(void) {
+  while (Serial2.available()) {
+    char inChar = (char)Serial2.read();
+    comando += inChar;
+    if (inChar == '!') {
+      cmd_ok = true;
+    }
+  }
+}
