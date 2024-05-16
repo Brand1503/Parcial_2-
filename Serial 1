@@ -1,4 +1,3 @@
-#include <Arduino.h>
 // recibe 3 comandos para realizar tareas
 // dos de ellos solo le ordenan ejecutar acciones
 // que seran el encendido de leds
@@ -11,35 +10,36 @@
 // la forma en que responde el micro es
 // ADC00#VALOR! o ADC01#VALOR!
 
+#include <Arduino.h>
+#define led1 18
+#define led2 19
 
-String comando = "";      // un String con el comando a ejecutar
+String comando = "";
 String cabecera = "";
 String num_str = "";
-bool cmd_ok = false;  //bool que indica que ya esta listo el comando 
+bool cmd_ok = false;
 uint16_t res_adc;
 
-void lectura_serial(void); //lee el puerto serial 1
+void lectura_serial(void);
 
 void setup() {
-  pinMode(18,OUTPUT);
-  digitalWrite(18,LOW);
-  pinMode(19,OUTPUT);
-  digitalWrite(19,LOW);
-  // initialize serial:
-  Serial2.begin(9600);
-  comando.reserve(50); 
+  pinMode(led1, OUTPUT);
+  digitalWrite(led1, LOW);
+  pinMode(led2, OUTPUT);
+  digitalWrite(led2, LOW);
+  Serial2.begin(115200);
+  comando.reserve(50);
 }
 
 void loop() {
   lectura_serial();
 
   if (cmd_ok) {
-    cabecera = comando.substring(0,3);
-    num_str = comando.substring(3,5);
-    if(cabecera.equals("LED")){
-      digitalWrite(num_str.toInt(),!digitalRead(num_str.toInt()));
-    }else if (cabecera.equals("ADC"))
-    {
+    cabecera = comando.substring(0, 3);
+    num_str = comando.substring(3, 5);
+    if (cabecera.equals("LED")) {
+      digitalWrite(num_str.toInt(), !digitalRead(num_str.toInt()));
+    } else if (cabecera.equals("ADC")) {
       res_adc = analogRead(num_str.toInt());
       Serial2.print(cabecera + num_str + "#" + res_adc + "!");
     }
@@ -47,7 +47,6 @@ void loop() {
     cmd_ok = false;
   }
 }
-
 
 void lectura_serial(void) {
   while (Serial2.available()) {
