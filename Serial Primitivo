@@ -1,0 +1,60 @@
+#include <Arduino.h>
+
+unsigned long ti, tf, dt;
+String string_pc_a_esp32 = "";
+String string_esp32 = "";
+String canal = "";
+String valor_canal = "";
+
+bool cadena_completa = false;
+
+void escucha_serial2(void);
+
+void setup() {
+  ti = tf = dt = 0;
+  Serial.begin(115200); // Inicializa el puerto serial 0, PC a ESP32
+  Serial2.begin(115200);  // Inicializa el puerto serial 2, ESP32 a Arduino Mega2560
+  Serial.println("Iniciando el ESP32");
+  string_pc_a_esp32.reserve(50);
+  string_esp32.reserve(50);
+}
+
+void loop() {
+  escucha_serial2();
+
+  if (cadena_completa) {
+    canal = string_esp32.substring(0, 5);
+    int indiceInicio = string_esp32.indexOf('#');
+    if (indiceInicio != -1) {
+      int indiceFin = string_esp32.indexOf('!', indiceInicio);
+      if (indiceFin != -1) {
+        valor_canal = string_esp32.substring(indiceInicio + 1, indiceFin);
+      }
+    }
+
+    Serial.println("El canal " + canal + " posee un valor de " + valor_canal);
+    string_esp32 = "";
+    cadena_completa = false;
+  }
+}
+
+void serialEvent() {
+  while (Serial.available()) {
+    char incomingByte = Serial.read();
+    string_pc_a_esp32 += incomingByte;
+    if (incomingByte == '!') {
+      Serial2.print(string_pc_a_esp32);
+      string_pc_a_esp32 = "";
+    }
+  }
+}
+
+void escucha_serial2() {
+  while (Serial2.available()) {
+    char incomingByte = Serial2.read();
+    string_esp32 += incomingByte;
+    if (incomingByte == '!') {
+      cadena_completa = true;
+    }
+  }
+}
