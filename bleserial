@@ -1,117 +1,162 @@
 #include <Arduino.h>
-#define led1 18
-#define led2 19
+#include "BluetoothSerial.h"
+
+#define DAC_CH1 25
+#define LED1  18
+#define LED2  19
 
 int raw = 0;
+unsigned long tinicio,tactual = 0; // Variable para almacenar el tiempo anterior
+unsigned long periodo = 15; // Intervalo en milisegundos
 
+String device_name = "ESP32_BLUETOOTH";
+
+BluetoothSerial SerialBT;
+
+String Serialdata = "";
+bool dataflag = 0;
 String comando = "";
-String cabecera = "";
-String num_str = "";
-String num_pwm = "";
-bool cmd_ok = false;
-uint16_t res_adc;
+int leds[] = {18,19};
 
-#define DAC_CH1 26
+void inicia_leds(void);
 
-#define DUTY_MAX_MOTOR 1023
-#define PIN_PWM_MOTOR 32
-#define CANAL_PWM_MOTOR 3
-#define RES_BITS_MOTOR 10
-#define FREC_PWM_MOTOR 100
+void dientedesierra();
+void encender_Leds();
 
-unsigned long periodo = 15;
+unsigned long ti, tf, dt;
+String string_pc_a_esp32 = "";
+String string_esp32 = "";
+String canal = "";
+String valor_canal = "";
 
-unsigned long tinicio = 0;
-unsigned long tactual = 0;
+bool cadena_completa = false;
 
-u_int dutyCycle_motor = 0;
+void escucha_serial2(void);
 
-void lectura_serial(void);
-void dientedesierra(void);
+void setup() {
+  ti = tf = dt = 0;
+  Serial.begin(115200); // Inicializa el puerto serial 0
+  Serial2.begin(115200);  // Inicializa el puerto serial 2
+  Serial.println("Iniciando el ESP32");
+  string_pc_a_esp32.reserve(50);
+  string_esp32.reserve(50);
 
-void setup()
-{
-  ledcSetup(CANAL_PWM_MOTOR, FREC_PWM_MOTOR, RES_BITS_MOTOR); // Configurar el canal PWM con frecuencia de 100 Hz y resolución de 10 bits
-  ledcAttachPin(PIN_PWM_MOTOR, CANAL_PWM_MOTOR);              // Asociar el pin motor al canal PWM
-
-  pinMode(led1, OUTPUT);
-  digitalWrite(led1, LOW);
-  pinMode(led2, OUTPUT);
-  digitalWrite(led2, LOW);
-  Serial2.begin(115200);
-  comando.reserve(50);
+  inicia_leds();
+  SerialBT.begin(device_name); //Bluetooth device name
+  Serial.printf("El dispositivo \"%s\" esta listo para emparejar\n", device_name.c_str());
+  
 }
 
-void loop()
-{
-  lectura_serial();
-  dientedesierra();
 
-  if (cmd_ok)
-  {
-    cabecera = comando.substring(0, 3);
-    num_str = comando.substring(3, 5);
-    if (cabecera.equals("LED"))
-    {
-      digitalWrite(num_str.toInt(), !digitalRead(num_str.toInt()));
-    }
-    else if (cabecera.equals("ADC"))
-    {
-      res_adc = analogRead(num_str.toInt());
-      Serial2.print(cabecera + num_str + "#" + res_adc + "!");
-    }
-    else if (cabecera.equals("PWM"))
-    {
-      num_pwm = comando.substring(3, 6);
-      dutyCycle_motor = num_pwm.toInt();
-      Serial2.print("La señal" + cabecera + num_str + "#" + "!");
-    }
-    else if (cabecera.equals("DAC"))
-    {
-      num_str = comando.substring(3, 4);
-      int num = num_str.toInt();
+void loop() {
+  escucha_serial2();
 
-      if (num == 2)
-      {
-        periodo = 7.81;
-      }
-      else if (num == 4)
-      {
-        periodo = 15;
-      }
-    }
-
-    comando = "";
-    cmd_ok = false;
-  }
-
-  ledcWrite(CANAL_PWM_MOTOR, dutyCycle_motor); // Escribir el ciclo de trabajo en el canal PWM
-}
-
-void lectura_serial(void)
-{
-  while (Serial2.available())
-  {
-    char inChar = (char)Serial2.read();
-    comando += inChar;
-    if (inChar == '!')
-    {
-      cmd_ok = true;
-    }
-  }
-}
-
-void dientedesierra(void)
-{
   tactual = millis();
-  if (tactual - tinicio >= periodo)
-  {                         // Comparar el tiempo actual con el tiempo anterior
-    tinicio = tactual;      // Guardar el tiempo actual como el último tiempo de muestreo
-    dacWrite(DAC_CH1, raw); // Escribir el valor actual al DAC
-    raw++;                  // Incrementar el valor
-    if (raw > 255)
-    {
-      raw = 0; // Resetear el valor si supera 255
+  dientedesierra();
+  encender_Leds();
+  //cuando hay algo para transmitir a bluetooth se hace!!!
+  if (cadena_completa) {
+    canal = string_esp32.substring(0, 5);
+    int indiceInicio = string_esp32.indexOf('#');
+    if (indiceInicio != -1) {
+      int indiceFin = string_esp32.indexOf('!', indiceInicio);
+      if (indiceFin != -1) {
+        valor_canal = string_esp32.substring(indiceInicio + 1, indiceFin);
+      }
+    }
+    Serial.println("El canal " + canal + " posee un valor de " + valor_canal);
+    string_esp32 = "";
+    cadena_completa = false;
+  }
+}
+
+void encender_Leds() {
+  if (dataflag == 1) {
+    SerialBT.print(Serialdata);
+    Serialdata = "";
+    dataflag = 0;
+  }
+
+  // Aquí se revisa si algo ha llegado desde el Bluetooth.
+  if (SerialBT.available() != 0) {
+    while (SerialBT.available() != 0) {
+      // Lee cada caracter que se recibe via Bluetooth
+      comando += char(SerialBT.read());
+    }
+    // Envía el comando recibido al puerto serial 2
+    Serial2.print(comando);
+
+    // Analiza el string recibido para tomar acción
+    if (comando.equals("led_on2")) {
+      digitalWrite(LED2, HIGH);
+      Serial.println("Encendido el LED19");
+      SerialBT.print("Encendido el LED19");
+    } else if (comando.equals("led_off2")) {
+      digitalWrite(LED2, LOW);
+      Serial.println("El LED19 ha sido apagado");
+      SerialBT.print("El LED19 ha sido apagado");
+    } else if (comando.equals("led_on")) {
+      digitalWrite(LED1, HIGH);
+      Serial.println("Encendido el LED18");
+      SerialBT.print("Encendido el LED18");
+    } else if (comando.equals("led_off")) {
+      digitalWrite(LED1, LOW);
+      Serial.println("El LED18 ha sido apagado");
+      SerialBT.print("El LED18 ha sido apagado");
+    } else if (comando.equals("DAC2")) {
+      digitalWrite(LED1, LOW);
+      periodo = 7.81;
+    }else if (comando.equals("DAC4")) {
+      digitalWrite(LED1, LOW);
+      periodo = 15;
+    }
+
+    Serial.println(comando);
+    comando = "";
+  }
+}
+
+void serialEvent() {
+  while (Serial.available()) {
+    char incomingByte = Serial.read();
+    string_pc_a_esp32 += incomingByte;
+    if (incomingByte == '!') {
+      Serial2.print(string_pc_a_esp32);
+      string_pc_a_esp32 = "";
     }
   }
+}
+
+void escucha_serial2() {
+  while (Serial2.available()) {
+    char incomingByte = Serial2.read();
+    string_esp32 += incomingByte;
+    if (incomingByte == '!') {
+      cadena_completa = true;
+    }
+  }
+}
+
+void dientedesierra(void){
+  // Comparar el tiempo actual con el tiempo anterior
+  if (tactual - tinicio >= periodo) {
+    // Guardar el tiempo actual como el último tiempo de muestreo
+    tinicio = tactual;
+    // Escribir el valor actual al DAC
+    dacWrite(DAC_CH1, raw);
+    // Incrementar el valor
+    raw++;
+    // Resetear el valor si supera 255
+    if (raw > 255) {
+      raw = 0;
+    }
+  }
+}
+
+void inicia_leds(void){
+  u_int8_t i;
+  for(i=0;i<2;++i){
+    pinMode(leds[i],OUTPUT);
+    digitalWrite(leds[i],LOW);
+    }
 }
