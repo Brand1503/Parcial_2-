@@ -68,8 +68,7 @@ void loop() {
   if (cmd_ok) {
     cabecera = comando.substring(0, 3);
     num_str = comando.substring(3, 5);
-    mostrarEnPantalla(comando); // Mostrar el comando en la pantalla OLED
-
+  
     if (cabecera.equals("LED")) {
       digitalWrite(num_str.toInt(), !digitalRead(num_str.toInt()));
     } else if (cabecera.equals("ADC")) {
@@ -86,6 +85,8 @@ void loop() {
       } else if (num == 4) {
         periodo = 15;
       }
+    }else if(!cabecera.equals("LED") & !cabecera.equals("PWM") & !cabecera.equals("ADC") & !cabecera.equals("led") ){
+      Serial2.print(comando);
     }
     comando = "";
     cmd_ok = false;
